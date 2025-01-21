@@ -1,0 +1,15 @@
+# Ignore all dotenv-files.
+.env*
+# Keep dotenv example.
+!.env.example
+# Keep S3 dotenv example.
+!.env.s3.example
+
+# MacOS metadata file.
+.DS_Store
+data.json
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
