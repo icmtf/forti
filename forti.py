@@ -32,12 +32,12 @@ def main():
     # Add rows
     for device in inventory.get("results", []):
         table.add_row(
-            device.get("adminip", "N/A"),
-            device.get("hostname", "N/A"),
-            device.get("vendor", "N/A"),
-            device.get("country", "N/A"),
-            device.get("role", "N/A"),
-            device.get("serial", "N/A")
+            str(device.get("adminip", "N/A")),
+            str(device.get("hostname", "N/A")),
+            str(device.get("vendor", "N/A")),
+            str(device.get("country", "N/A")),
+            str(device.get("role", "N/A")),
+            str(device.get("serial", "N/A"))
         )
 
     # Print table
