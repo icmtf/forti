@@ -1,8 +1,8 @@
 from rich.console import Console
 from rich.table import Table
 from common import get_inet_inventory
+from pyinet.common.easynet import EasyNet
 import logging
-import json
 import os
 
 # Konfiguracja logowania
@@ -10,9 +10,19 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def get_easynet_inventory():
-    # W trybie development używamy pliku mock
-    with open('/projects/BNP/CodeHorizon/python_workers/easynet_worker/data.json', 'r') as f:
-        return json.load(f)
+    # Initialize EasyNet client with environment variables
+    easynet = EasyNet(
+        apigee_base_uri=os.environ.get('APIGEE_BASE_URI'),
+        apigee_token_endpoint=os.environ.get('APIGEE_TOKEN_ENDPOINT'),
+        apigee_easynet_endpoint=os.environ.get('APIGEE_EASYNET_ENDPOINT'),
+        apigee_certificate=os.environ.get('CYBERARK_CERTIFICATE'),
+        apigee_key=os.environ.get('CYBERARK_KEY'),
+        easynet_key=os.environ.get('EASYNET_KEY'),
+        easynet_secret=os.environ.get('EASYNET_SECRET'),
+        ca_requests_bundle=os.environ.get('REQUESTS_CA_BUNDLE')
+    )
+    
+    return easynet.get_devices()
 
 def main():
     # Initialize Rich console
