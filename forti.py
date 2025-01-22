@@ -2,7 +2,7 @@ from rich.console import Console
 from rich.table import Table
 from common import get_inet_inventory
 import logging
-from pyinet.common.easynet import EasyNet
+import json
 import os
 
 # Konfiguracja logowania
@@ -10,19 +10,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def get_easynet_inventory():
-    # Initialize EasyNet client with environment variables
-    easynet = EasyNet(
-        apigee_base_uri="https://apigee.echonet",
-        apigee_token_endpoint="123",
-        apigee_easynet_endpoint="/it-prod",
-        apigee_certificate=os.environ.get('CYBERARK_CERTIFICATE'),
-        apigee_key=os.environ.get('CYBERARK_KEY'),
-        easynet_key="123",
-        easynet_secret="xyz",
-        ca_requests_bundle=os.environ.get('REQUESTS_CA_BUNDLE')
-    )
-    
-    return easynet.get_devices()
+    # W trybie development używamy pliku mock
+    with open('/projects/BNP/CodeHorizon/python_workers/easynet_worker/data.json', 'r') as f:
+        return json.load(f)
 
 def main():
     # Initialize Rich console
@@ -78,25 +68,30 @@ def main():
     try:
         easynet_devices = get_easynet_inventory()
         
-        # Create EasyNet table
-        easynet_table = Table(title="EasyNet Inventory - All Devices")
+        # Filter only Fortinet devices
+        fortinet_devices = [device for device in easynet_devices if device.get("vendor", "").lower() == "fortinet"]
         
-        # Add columns for EasyNet
-        easynet_table.add_column("Hostname", style="green")
+        # Create EasyNet table
+        easynet_table = Table(title="EasyNet Inventory - Fortinet Devices")
+        
+        # Add columns for EasyNet według nowej specyfikacji
         easynet_table.add_column("IP Address", style="cyan")
-        easynet_table.add_column("Model", style="yellow")
+        easynet_table.add_column("Hostname", style="green")
+        easynet_table.add_column("Vendor", style="yellow")
+        easynet_table.add_column("Country", style="blue")
+        easynet_table.add_column("Zone", style="magenta")
         easynet_table.add_column("Serial", style="red")
-        easynet_table.add_column("Location", style="blue")
         
         # Add rows for EasyNet
-        for device in easynet_devices:
+        for device in fortinet_devices:
             try:
                 row_data = [
+                    str(device.get("ip") or "N/A"),
                     str(device.get("hostname") or "N/A"),
-                    str(device.get("ip_address") or "N/A"),
-                    str(device.get("model") or "N/A"),
-                    str(device.get("serial") or "N/A"),
-                    str(device.get("location") or "N/A")
+                    str(device.get("vendor") or "N/A"),
+                    str(device.get("country") or "N/A"),
+                    str(device.get("zone") or "N/A"),
+                    str(device.get("serial_number") or "N/A")
                 ]
                 easynet_table.add_row(*row_data)
             except Exception as e:
