@@ -1,7 +1,7 @@
 from pyinet.common.easynet import EasyNet
 import os
 import csv
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict
 
 def get_easynet_inventory():
@@ -17,7 +17,7 @@ def get_easynet_inventory():
         ca_requests_bundle=os.environ.get('REQUESTS_CA_BUNDLE')
     )
     
-    return easynet.get_devices(size=0, vendor="Fortinet", status="Operational")
+    return easynet.get_devices(size=10, vendor="Fortinet")
 
 def save_comparison_to_csv(comparison_data: List[Dict], output_file: str = None):
     """
@@ -32,8 +32,20 @@ def save_comparison_to_csv(comparison_data: List[Dict], output_file: str = None)
         'IP', 'IP_INET', 'IP_EN',
         'Hostname', 'Hostname_INET', 'Hostname_EN',
         'Serial', 'Serial_INET', 'Serial_EN',
-        'Status', 'Last_Update'
+        'Status', 'Last_Update', 'Vendor', 'Date_Status'
     ]
+    
+    # Process Date Status for each record before saving
+    for record in comparison_data:
+        if record['Last_Update']:
+            try:
+                update_date = datetime.strptime(record['Last_Update'], '%Y-%m-%d')
+                week_ago = datetime.now() - timedelta(days=7)
+                record['Date_Status'] = 'OK' if update_date > week_ago else 'WARNING'
+            except ValueError:
+                record['Date_Status'] = 'ERROR'
+        else:
+            record['Date_Status'] = 'N/A'
     
     if output_file is None:
         # Get timestamp for filename

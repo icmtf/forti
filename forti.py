@@ -31,7 +31,9 @@ def compare_inventories(inet_devices: List[Dict], easynet_devices: List[Dict]) -
             'Hostname': None, 'Hostname_INET': None, 'Hostname_EN': None,
             'Serial': None, 'Serial_INET': None, 'Serial_EN': None,
             'Status': None,
-            'Last_Update': None
+            'Last_Update': None,
+            'Vendor': None,
+            'Date_Status': None
         }
         
         if inet_dev and easynet_dev:
@@ -50,7 +52,8 @@ def compare_inventories(inet_devices: List[Dict], easynet_devices: List[Dict]) -
                 'IP': ip,
                 'Hostname': inet_dev['hostname'].lower() if inet_dev['hostname'].lower() == easynet_dev['hostname'].lower() else None,
                 'Serial': inet_dev['serial'] if inet_dev['serial'] == easynet_dev['serial_number'] else None,
-                'Last_Update': easynet_dev['last_update']
+                'Last_Update': easynet_dev['last_update'],
+                'Vendor': easynet_dev['vendor']
             })
             
             # Set status based on matches
@@ -86,7 +89,8 @@ def compare_inventories(inet_devices: List[Dict], easynet_devices: List[Dict]) -
                     'IP_EN': ip,
                     'Hostname_EN': easynet_dev['hostname'],
                     'Serial_EN': easynet_dev['serial_number'],
-                    'Last_Update': easynet_dev['last_update']
+                    'Last_Update': easynet_dev['last_update'],
+                    'Vendor': easynet_dev['vendor']
                 })
         
         result.append(record)
@@ -116,6 +120,8 @@ def create_comparison_table(comparison_data: List[Dict]) -> Table:
     table.add_column("Serial_EN", style="bright_blue")
     table.add_column("Status", style="white")
     table.add_column("Last Update", style="white")
+    table.add_column("Vendor", style="yellow")
+    table.add_column("Date Status", style="white")
     
     for idx, record in enumerate(comparison_data):
         # Check date for Last Update
@@ -128,6 +134,23 @@ def create_comparison_table(comparison_data: List[Dict]) -> Table:
             except ValueError:
                 last_update_style = "white"
         
+        # Calculate Date Status
+        date_status = "N/A"
+        date_status_style = "white"
+        if record['Last_Update']:
+            try:
+                update_date = datetime.strptime(record['Last_Update'], '%Y-%m-%d')
+                week_ago = datetime.now() - timedelta(days=7)
+                if update_date > week_ago:
+                    date_status = "OK"
+                    date_status_style = "green"
+                else:
+                    date_status = "WARNING"
+                    date_status_style = "yellow1"
+            except ValueError:
+                date_status = "ERROR"
+                date_status_style = "red"
+
         # Set style for Status
         status_style = {
             'OK': 'green',
@@ -147,7 +170,9 @@ def create_comparison_table(comparison_data: List[Dict]) -> Table:
             str(record['Serial_INET'] or ''),
             str(record['Serial_EN'] or ''),
             Text(str(record['Status'] or ''), style=status_style),
-            Text(str(record['Last_Update'] or ''), style=last_update_style)
+            Text(str(record['Last_Update'] or ''), style=last_update_style),
+            str(record['Vendor'] or ''),
+            Text(date_status, style=date_status_style)
         )
     
     return table
