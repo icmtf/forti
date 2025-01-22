@@ -2,29 +2,15 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 from common import get_inet_inventory
-from pyinet.common.easynet import EasyNet
+from forti_common import get_easynet_inventory, save_comparison_to_csv
 from datetime import datetime, timedelta
 from typing import Dict, List
 import logging
 import os
+import argparse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-def get_easynet_inventory():
-    # Initialize EasyNet client with environment variables
-    easynet = EasyNet(
-        apigee_base_uri=os.environ.get('APIGEE_BASE_URI'),
-        apigee_token_endpoint=os.environ.get('APIGEE_TOKEN_ENDPOINT'),
-        apigee_easynet_endpoint=os.environ.get('APIGEE_EASYNET_ENDPOINT'),
-        apigee_certificate=os.environ.get('CYBERARK_CERTIFICATE'),
-        apigee_key=os.environ.get('CYBERARK_KEY'),
-        easynet_key=os.environ.get('EASYNET_KEY'),
-        easynet_secret=os.environ.get('EASYNET_SECRET'),
-        ca_requests_bundle=os.environ.get('REQUESTS_CA_BUNDLE')
-    )
-    
-    return easynet.get_devices(size=10, vendor="Fortinet")
 
 def compare_inventories(inet_devices: List[Dict], easynet_devices: List[Dict]) -> List[Dict]:
     result = []
@@ -76,15 +62,11 @@ def compare_inventories(inet_devices: List[Dict], easynet_devices: List[Dict]) -
                 record['Status'] = 'KO'
                 
             # Add differences if any exist
-            # Check if hostnames are different
             if inet_dev['hostname'].lower() != easynet_dev['hostname'].lower():
-                # If they're equal after lowercasing but different in original form,
-                # wrap them in ().lower notation
                 if inet_dev['hostname'].lower() == easynet_dev['hostname'].lower():
                     record['Hostname_INET'] = f'({inet_dev["hostname"]}).lower'
                     record['Hostname_EN'] = f'({easynet_dev["hostname"]}).lower'
                 else:
-                    # If they're completely different, leave them as is
                     record['Hostname_INET'] = inet_dev['hostname']
                     record['Hostname_EN'] = easynet_dev['hostname']
             if inet_dev['serial'] != easynet_dev['serial_number']:
@@ -110,15 +92,9 @@ def compare_inventories(inet_devices: List[Dict], easynet_devices: List[Dict]) -
         result.append(record)
     
     # Sort results
-    # First: records with IP in both systems
-    # Second: records with IP only in EasyNet
-    # Third: records with IP only in INET
     sorted_result = sorted(result, key=lambda x: (
-        # Priority 1: Records with IP in both (will be first)
         not bool(x['IP']),
-        # Priority 2: Records with IP_EN (will be second)
         not bool(x['IP_EN']),
-        # Priority 3: Records with IP_INET (will be last)
         bool(x['IP_INET'])
     ))
     
@@ -148,7 +124,7 @@ def create_comparison_table(comparison_data: List[Dict]) -> Table:
             try:
                 update_date = datetime.strptime(record['Last_Update'], '%Y-%m-%d')
                 week_ago = datetime.now() - timedelta(days=7)
-                last_update_style = "bright_yellow" if update_date > week_ago else "yellow1"
+                last_update_style = "green" if update_date > week_ago else "yellow1"
             except ValueError:
                 last_update_style = "white"
         
@@ -177,12 +153,17 @@ def create_comparison_table(comparison_data: List[Dict]) -> Table:
     return table
 
 def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Compare Fortinet device inventories')
+    parser.add_argument('--csv', nargs='?', const=True, help='Export comparison data to CSV. Optional path can be provided')
+    args = parser.parse_args()
+
     # Initialize Rich console
     console = Console()
 
     # Get inventory data from INET
     inet_inventory = get_inet_inventory(
-        vendor="fortinet",
+        # vendor="fortinet",
         status="active",
         selectcol=[
             "adminip",
@@ -194,83 +175,91 @@ def main():
         ]
     )
 
-    # Create and print INET table
-    inet_table = Table(title="INET Inventory - Fortinet Devices")
-    
-    # Add columns for INET
-    inet_table.add_column("Admin IP", style="cyan")
-    inet_table.add_column("Hostname", style="green")
-    inet_table.add_column("Vendor", style="yellow")
-    inet_table.add_column("Country", style="blue")
-    inet_table.add_column("Role", style="magenta")
-    inet_table.add_column("Serial", style="red")
-
-    # Add rows for INET
-    for device in inet_inventory.get("results", []):
-        try:
-            row_data = [
-                str(device.get("adminip") or "N/A"),
-                str(device.get("hostname") or "N/A"),
-                str(device.get("vendor") or "N/A"),
-                str(device.get("country") or "N/A"),
-                str(device.get("role") or "N/A"),
-                str(device.get("serial") or "N/A")
-            ]
-            inet_table.add_row(*row_data)
-        except Exception as e:
-            logger.error(f"Error processing INET device: {device}")
-            logger.error(f"Error details: {str(e)}")
-            continue
-
-    # Print INET table
-    console.print(inet_table)
-    console.print()  # Empty line for separation
-
     try:
         # Get EasyNet data
         easynet_devices = get_easynet_inventory()
         
-        # Create EasyNet table
-        easynet_table = Table(title="EasyNet Inventory - Fortinet Devices")
-        
-        # Add columns for EasyNet
-        easynet_table.add_column("IP Address", style="cyan")
-        easynet_table.add_column("Hostname", style="green")
-        easynet_table.add_column("Vendor", style="yellow")
-        easynet_table.add_column("Country", style="blue")
-        easynet_table.add_column("Zone", style="magenta")
-        easynet_table.add_column("Serial", style="red")
-        easynet_table.add_column("Last Updated", style="white")
-        
-        # Add rows for EasyNet
-        for device in easynet_devices:
-            try:
-                row_data = [
-                    str(device.get("ip") or "N/A"),
-                    str(device.get("hostname") or "N/A"),
-                    str(device.get("vendor") or "N/A"),
-                    str(device.get("country") or "N/A"),
-                    str(device.get("zone") or "N/A"),
-                    str(device.get("serial_number") or "N/A"),
-                    str(device.get("last_update") or "N/A")
-                ]
-                easynet_table.add_row(*row_data)
-            except Exception as e:
-                logger.error(f"Error processing EasyNet device: {device}")
-                logger.error(f"Error details: {str(e)}")
-                continue
-
-        # Print EasyNet table
-        console.print(easynet_table)
-        console.print()  # Empty line for separation
-
-        # Create and print comparison table
+        # Create and process comparison data
         comparison_data = compare_inventories(
             inet_inventory.get("results", []),
             easynet_devices
         )
-        comparison_table = create_comparison_table(comparison_data)
-        console.print(comparison_table)
+
+        if args.csv:
+            # Save to CSV if --csv flag is provided
+            output_file = save_comparison_to_csv(comparison_data, args.csv if isinstance(args.csv, str) else None)
+            logger.info(f"Comparison data has been exported to {output_file}")
+        else:
+            # Display tables as before
+            # Create and print INET table
+            inet_table = Table(title="INET Inventory - Fortinet Devices")
+            
+            # Add columns for INET
+            inet_table.add_column("Admin IP", style="cyan")
+            inet_table.add_column("Hostname", style="green")
+            inet_table.add_column("Vendor", style="yellow")
+            inet_table.add_column("Country", style="blue")
+            inet_table.add_column("Role", style="magenta")
+            inet_table.add_column("Serial", style="red")
+
+            # Add rows for INET
+            for device in inet_inventory.get("results", []):
+                try:
+                    row_data = [
+                        str(device.get("adminip") or "N/A"),
+                        str(device.get("hostname") or "N/A"),
+                        str(device.get("vendor") or "N/A"),
+                        str(device.get("country") or "N/A"),
+                        str(device.get("role") or "N/A"),
+                        str(device.get("serial") or "N/A")
+                    ]
+                    inet_table.add_row(*row_data)
+                except Exception as e:
+                    logger.error(f"Error processing INET device: {device}")
+                    logger.error(f"Error details: {str(e)}")
+                    continue
+
+            # Print INET table
+            console.print(inet_table)
+            console.print()  # Empty line for separation
+            
+            # Create EasyNet table
+            easynet_table = Table(title="EasyNet Inventory - Fortinet Devices")
+            
+            # Add columns for EasyNet
+            easynet_table.add_column("IP Address", style="cyan")
+            easynet_table.add_column("Hostname", style="green")
+            easynet_table.add_column("Vendor", style="yellow")
+            easynet_table.add_column("Country", style="blue")
+            easynet_table.add_column("Zone", style="magenta")
+            easynet_table.add_column("Serial", style="red")
+            easynet_table.add_column("Last Updated", style="white")
+            
+            # Add rows for EasyNet
+            for device in easynet_devices:
+                try:
+                    row_data = [
+                        str(device.get("ip") or "N/A"),
+                        str(device.get("hostname") or "N/A"),
+                        str(device.get("vendor") or "N/A"),
+                        str(device.get("country") or "N/A"),
+                        str(device.get("zone") or "N/A"),
+                        str(device.get("serial_number") or "N/A"),
+                        str(device.get("last_update") or "N/A")
+                    ]
+                    easynet_table.add_row(*row_data)
+                except Exception as e:
+                    logger.error(f"Error processing EasyNet device: {device}")
+                    logger.error(f"Error details: {str(e)}")
+                    continue
+
+            # Print EasyNet table
+            console.print(easynet_table)
+            console.print()  # Empty line for separation
+
+            # Create and print comparison table
+            comparison_table = create_comparison_table(comparison_data)
+            console.print(comparison_table)
 
     except Exception as e:
         logger.error(f"Error getting EasyNet inventory: {str(e)}")
