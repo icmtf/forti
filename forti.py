@@ -30,8 +30,8 @@ def main():
 
     # Get inventory data from INET
     inet_inventory = get_inet_inventory(
-        vendor="fortinet",  # dodajemy filtr dla testów
-        status="active",    # tylko aktywne urządzenia
+        vendor="fortinet",
+        status="active",
         selectcol=[
             "adminip",
             "hostname",
