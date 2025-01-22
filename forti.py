@@ -22,7 +22,7 @@ def get_easynet_inventory():
         ca_requests_bundle=os.environ.get('REQUESTS_CA_BUNDLE')
     )
     
-    return easynet.get_devices()
+    return easynet.get_devices(size=10, vendor="Fortinet")
 
 def main():
     # Initialize Rich console
@@ -78,9 +78,6 @@ def main():
     try:
         easynet_devices = get_easynet_inventory()
         
-        # Filter only Fortinet devices
-        fortinet_devices = [device for device in easynet_devices if device.get("vendor", "").lower() == "fortinet"]
-        
         # Create EasyNet table
         easynet_table = Table(title="EasyNet Inventory - Fortinet Devices")
         
@@ -93,7 +90,7 @@ def main():
         easynet_table.add_column("Serial", style="red")
         
         # Add rows for EasyNet
-        for device in fortinet_devices:
+        for device in easynet_devices:
             try:
                 row_data = [
                     str(device.get("ip") or "N/A"),
